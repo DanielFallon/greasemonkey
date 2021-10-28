@@ -6,6 +6,7 @@
 // @author       You
 // @match        https://www2.cammedia.com/*/chat.html*
 // @match        https://www2.cammedia.com/1/*/profile/*
+// @match        https://www2.cammedia.com/1/*/members/*
 // @grant        none
 // ==/UserScript==
 
@@ -17,7 +18,7 @@ function waitFor(checkFn, checkFrequencyMs, timeoutMs) {
         const f = ()=>{
             const v = checkFn()
             console.log("Checked a value:",v)
-            if(v !== undefined){
+            if(v !== undefined && v !== false){
                 return res(v);
             }
             if(timeoutMs && Date.now() - startTimeMs > timeoutMs) {
@@ -34,10 +35,8 @@ function waitFor(checkFn, checkFrequencyMs, timeoutMs) {
 // see them by going to: https://www2.cammedia.com/1/chat/members/my_account.php
 (async function() {
     'use strict';
-    const re = /^https:\/\/www2.cammedia.com\/1\/[^/]*\/profile\/.*/
+    const re = /^https:\/\/www2.cammedia.com\/1\/[^/]*\/(profile|members)\/.*/
     if(!re.test(window.location.toString())) return;
-    // initialize if it doesn't exist
-    window.IMChat = window.IMChat || {};
 
     const channel = new BroadcastChannel('chat-app');
 
@@ -47,6 +46,19 @@ function waitFor(checkFn, checkFrequencyMs, timeoutMs) {
 
     // })
 
+    await waitFor(()=>window.$, 50, 500)
+    let $ = window.$
+    let ch = (ev) => {
+        let room = ev.target.getAttribute("data-room")
+        channel.postMessage(["goRoom",[room]]);
+
+    }
+    await waitFor(()=>$("#c_go").length > 0 || $(".c_go").length > 0, 10, 300)
+    $("#c_go").click(ch)
+    $(".c_go").click(ch)
+
+    // initialize if it doesn't exist
+    window.IMChat = window.IMChat || {};
     window.IMChat.popCon = window.IMChat.popCon || ((r, e, t) => {
         channel.postMessage(["popCon",[r, e, t]]);
 
@@ -68,9 +80,14 @@ function waitFor(checkFn, checkFrequencyMs, timeoutMs) {
     await waitFor(()=>window.IMChat, 100, 120000)
 
     channel.addEventListener ('message', (event) => {
-        console.log(event.data);
-        if(event.data[0] === "popCon"){
-            window.IMChat.popCon.apply(window.IMChat, event.data[1])
+        let cmd = event.data[0]
+        let args = event.data[1]
+        switch (cmd) {
+            case "popCon":
+                window.IMChat.popCon.apply(window.IMChat, event.data[1])
+                break;
+            case "goRoom":
+                window.$("#" + args[0].replace(/ /g, "_")).click()
         }
     });
 
